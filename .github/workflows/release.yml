@@ -120,7 +120,6 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$ARCHIVE"
-          cp -r config/* "$ARCHIVE"/
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             cp "$BIN_DIR/dn42-roa-generator.exe" "$ARCHIVE"/
           else
