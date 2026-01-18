@@ -20,5 +20,6 @@ RUN ./upx-4.2.4-amd64_linux/upx --best target/release/dn42-roa-generator
 # production stage
 FROM debian:stable-slim
 RUN apt-get update
+RUN apt-get -y install git
 COPY --from=builder /usr/src/dn42-roa-generator/target/release/dn42-roa-generator /usr/local/bin/dn42-roa-generator
 CMD ["dn42-roa-generator"]
