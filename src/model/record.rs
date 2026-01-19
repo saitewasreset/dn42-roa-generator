@@ -92,10 +92,10 @@ impl Display for RecordField {
 
 pub struct RecordFile {
     file_path: PathBuf,
-    field_map: HashMap<RecordField, String>,
+    field_map: HashMap<RecordField, Vec<String>>,
 }
 
-fn parse_content(content: &str) -> HashMap<RecordField, String> {
+fn parse_content(content: &str) -> HashMap<RecordField, Vec<String>> {
     let mut field_map = HashMap::new();
 
     for line in content.lines() {
@@ -111,7 +111,7 @@ fn parse_content(content: &str) -> HashMap<RecordField, String> {
                 Err(_) => continue, // Skip unknown fields
             };
 
-            field_map.insert(field, value.trim().to_string());
+            field_map.entry(field).or_insert_with(Vec::new).push(value.trim().to_owned());
         }
     }
 
@@ -128,7 +128,7 @@ impl RecordFile {
         })
     }
 
-    pub fn get_field(&self, key: RecordField) -> Option<&String> {
+    pub fn get_field(&self, key: RecordField) -> Option<&Vec<String>> {
         self.field_map.get(&key)
     }
 
