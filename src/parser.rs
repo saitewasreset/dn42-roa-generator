@@ -87,11 +87,16 @@ pub fn get_parsed_ns_records(record_files: &[RecordFile], dns_primary_master: &s
     // TODO: 处理反向解析
     const DEFAULT_TTL: u32 = 3600;
 
-    fn new_zone(tld: &str, dns_primary_master: String, dns_responsible_person: String) -> DNSZone {
+    let serial = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as u32)
+        .unwrap_or(0);
+
+    fn new_zone(tld: &str, dns_primary_master: String, dns_responsible_person: String, serial: u32) -> DNSZone {
         DNSZone::new(FQDNName::from_str(tld).unwrap(), DNSRecordData::SOA {
             mname: dns_primary_master,
             rname: dns_responsible_person,
-            serial: 0,
+            serial,
             refresh: 3600,
             retry: 600,
             expire: 604800,
@@ -124,7 +129,7 @@ pub fn get_parsed_ns_records(record_files: &[RecordFile], dns_primary_master: &s
                 }
             };
 
-            let zone = tld_to_zone.entry(tld.clone()).or_insert_with(|| new_zone(&tld, dns_primary_master.to_string(), dns_responsible_person.to_string()));
+            let zone = tld_to_zone.entry(tld.clone()).or_insert_with(|| new_zone(&tld, dns_primary_master.to_string(), dns_responsible_person.to_string(), serial));
 
             if let Some(nservers) = record_file.get_field(RecordField::NameServer) {
                 // nserver:  ns1.burble.dn42 172.20.129.1
