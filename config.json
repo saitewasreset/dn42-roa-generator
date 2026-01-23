@@ -1,9 +1,5 @@
 {
   "listen_address": "0.0.0.0:8080",
-  "roa_endpoint": "/roa.json",
-  "git_repo_url": "git@git.dn42.dev:dn42/registry.git",
-  "git_repo_local_path": "./registry",
-  "git_repo_ipv4_route_relative_path": "data/route",
-  "git_repo_ipv6_route_relative_path": "data/route6",
-  "update_interval_seconds": 300
+  "do_git_pull": false,
+  "git_repo_url": "git@git.dn42.dev:dn42/registry.git"
 }

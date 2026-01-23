@@ -1,14 +1,14 @@
-use std::env;
-use std::path::Path;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Router;
 use axum::routing::get;
-use tracing::info;
-use dn42_roa_generator::{AppConfig, AppState, ROACache};
+use axum::Router;
 use dn42_roa_generator::io::background_updater;
+use dn42_roa_generator::{AppConfig, AppState};
+use std::env;
+use std::path::Path;
+use tracing::info;
 
 const CONFIG_PATH: &str = "config.json";
 
@@ -30,12 +30,9 @@ fn init_app_state() -> AppState {
     let config_path = Path::new(config_path.as_str());
 
     let app_config = if config_path.exists() {
-        serde_json::from_reader(std::fs::File::open(config_path).unwrap())
-            .map(|config| {
-                info!("Loaded configuration from {:?}", config_path);
+        info!("Loaded configuration from {:?}", config_path);
 
-                config
-            })
+        serde_json::from_reader(std::fs::File::open(config_path).unwrap())
             .unwrap_or_else(|e| {
                 panic!("Failed to load configuration from {:?}: {:?}", config_path, e);
             })
@@ -51,7 +48,7 @@ fn init_app_state() -> AppState {
 
     AppState {
         config: std::sync::Arc::new(app_config),
-        data: std::sync::Arc::new(std::sync::RwLock::new(ROACache::default())),
+        ..Default::default()
     }
 }
 
@@ -63,10 +60,11 @@ async fn main() -> anyhow::Result<()> {
 
     let update_task_app_state = app_state.clone();
 
-    tokio::spawn(async move {background_updater(update_task_app_state).await;});
+    tokio::spawn(async move { background_updater(update_task_app_state).await; });
 
     let app = Router::new()
         .route(&app_state.config.roa_endpoint, get(get_roa_json))
+        .route(&app_state.config.dns_endpoint, get(get_dns_conf))
         .with_state(app_state.clone());
 
     let listener = tokio::net::TcpListener::bind(&app_state.config.listen_address).await?;
@@ -79,7 +77,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn get_roa_json(State(state): State<AppState>) -> Response<Body> {
-    let data = match state.data.read() {
+    let data = match state.roa_data.read() {
         Ok(data) => data,
         Err(_) => {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -89,5 +87,19 @@ async fn get_roa_json(State(state): State<AppState>) -> Response<Body> {
     (
         [("Content-Type", "application/json")],
         data.json_content.clone(),
+    ).into_response()
+}
+
+async fn get_dns_conf(State(state): State<AppState>) -> Response<Body> {
+    let data = match state.dns_data.read() {
+        Ok(data) => data,
+        Err(_) => {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    (
+        [("Content-Type", "text/plain")],
+        data.content.clone(),
     ).into_response()
 }

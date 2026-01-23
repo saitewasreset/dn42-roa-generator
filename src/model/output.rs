@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use serde::Serialize;
 
 #[derive(Serialize, Debug)]
@@ -30,4 +31,10 @@ pub struct ROA {
 pub struct RpkiClientOutput {
     pub metadata: Metadata,
     pub roas: Vec<ROA>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ForwardZoneItem {
+    pub domain: String,
+    pub servers: Vec<IpAddr>,
 }

@@ -1,9 +1,9 @@
-use std::cell::{LazyCell};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use strum::{Display, EnumString};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Prefix {
@@ -40,54 +40,26 @@ impl Display for Prefix {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumString, Display)]
 pub enum RecordField {
+    #[strum(serialize = "route")]
     Route,
+    #[strum(serialize = "route6")]
     Route6,
+    #[strum(serialize = "origin")]
     Origin,
+    #[strum(serialize = "source")]
     Source,
+    #[strum(serialize = "max-length")]
     MaxLength,
+    #[strum(serialize = "descr")]
     Description,
-}
 
-impl RecordField {
-    const NAMES_TO_FIELDS: phf::Map<&'static str, RecordField> = phf::phf_map! {
-        "route" => RecordField::Route,
-        "route6" => RecordField::Route6,
-        "origin" => RecordField::Origin,
-        "source" => RecordField::Source,
-        "max-length" => RecordField::MaxLength,
-        "descr" => RecordField::Description,
-    };
-
-    const FIELDS_TO_NAMES: LazyCell<HashMap<RecordField, &'static str>> = LazyCell::new(|| {
-        let mut map = HashMap::new();
-        for (name, field) in RecordField::NAMES_TO_FIELDS.entries() {
-            map.insert(field.clone(), *name);
-        }
-        map
-    });
-}
-
-impl FromStr for RecordField {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        RecordField::NAMES_TO_FIELDS
-            .get(s)
-            .cloned()
-            .ok_or_else(|| format!("Unknown record field name: {}", s))
-    }
-}
-
-impl Display for RecordField {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(name) = RecordField::FIELDS_TO_NAMES.get(self) {
-            write!(f, "{}", name)
-        } else {
-            write!(f, "Unknown")
-        }
-    }
+    // DNS
+    #[strum(serialize = "domain")]
+    Domain,
+    #[strum(serialize = "nserver")]
+    NameServer,
 }
 
 pub struct RecordFile {
