@@ -1,6 +1,6 @@
 use crate::io::get_records_from_dirs;
 use crate::model::output::RpkiClientOutput;
-use crate::parser::get_parsed_roa_routes;
+use crate::parser::route::get_parsed_roa_routes;
 use crate::task::Task;
 use crate::AppState;
 use std::path::Path;

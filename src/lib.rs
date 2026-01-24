@@ -30,6 +30,8 @@ pub struct AppConfig {
     pub git_repo_ipv6_route_relative_path: String,
 
     pub git_repo_dns_relative_path: String,
+    pub git_repo_inetnum_relative_path: String,
+    pub git_repo_inet6num_relative_path: String,
 
     pub update_interval_seconds: u64,
 
@@ -50,6 +52,8 @@ impl Default for AppConfig {
             git_repo_ipv6_route_relative_path: "data/route6".to_string(),
 
             git_repo_dns_relative_path: "data/dns".to_string(),
+            git_repo_inetnum_relative_path: "data/inetnum".to_string(),
+            git_repo_inet6num_relative_path: "data/inet6num".to_string(),
 
             update_interval_seconds: 300,
 

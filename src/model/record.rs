@@ -1,14 +1,31 @@
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use strum::{Display, EnumString};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Prefix {
-    pub network: IpAddr,
-    pub prefix_len: u8,
+    network: IpAddr,
+    prefix_len: u8,
+}
+
+fn octets_to_bits(octets: &[u8], prefix_len: u8) -> Vec<u8> {
+    let mut bits = Vec::new();
+    let total_bits = prefix_len as usize;
+
+    for &octet in octets {
+        for i in (0..8).rev() {
+            if bits.len() < total_bits {
+                bits.push((octet >> i) & 1);
+            } else {
+                break;
+            }
+        }
+    }
+
+    bits
 }
 
 fn bits_to_octets(bits: &[u8]) -> Vec<u8> {
@@ -41,6 +58,30 @@ fn vec_to_slice_zero_fill<const N: usize>(vec: &Vec<u8>) -> [u8; N] {
 }
 
 impl Prefix {
+    pub fn new(network: IpAddr, prefix_len: u8) -> Result<Self, String> {
+        let network = match network {
+            IpAddr::V4(ipv4) => {
+                if prefix_len > 32 {
+                    return Err(format!("Invalid prefix length for IPv4: {}", prefix_len));
+                }
+
+                IpAddr::V4(Ipv4Addr::from(vec_to_slice_zero_fill(&bits_to_octets(&octets_to_bits(&ipv4.octets(), prefix_len)))))
+            }
+            IpAddr::V6(ipv6) => {
+                if prefix_len > 128 {
+                    return Err(format!("Invalid prefix length for IPv6: {}", prefix_len));
+                }
+
+                IpAddr::V6(Ipv6Addr::from(vec_to_slice_zero_fill(&bits_to_octets(&octets_to_bits(&ipv6.octets(), prefix_len)))))
+            }
+        };
+
+        Ok(Prefix {
+            network,
+            prefix_len,
+        })
+    }
+
     pub fn with_prefix_len(&self, new_prefix_len: u8) -> Self {
         let mut bits = self.get_bits();
 
@@ -107,6 +148,14 @@ impl Prefix {
             IpAddr::V6(addr) => to_bits(&addr.octets()),
         }
     }
+
+    pub fn network(&self) -> &IpAddr {
+        &self.network
+    }
+
+    pub fn prefix_len(&self) -> u8 {
+        self.prefix_len
+    }
 }
 
 impl FromStr for Prefix {
@@ -168,6 +217,10 @@ pub enum RecordField {
     Domain,
     #[strum(serialize = "nserver")]
     NameServer,
+
+    // Inetnum
+    #[strum(serialize = "cidr")]
+    Cidr,
 }
 
 pub struct RecordFile {

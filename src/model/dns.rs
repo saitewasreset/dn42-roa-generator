@@ -141,8 +141,9 @@ impl FQDNName {
         }
 
         // interior characters only letters, digits, and hyphen.
+        // For reverse DNS, we also allow '/'.
         for &c in &chars {
-            if !c.is_ascii_alphanumeric() && c != '-' {
+            if !c.is_ascii_alphanumeric() && c != '-' && c != '/' {
                 return Err(FQDNError::InvalidCharacter(c, label.to_string()));
             }
         }
@@ -321,19 +322,25 @@ impl PrefixTree {
         }
     }
 
-    pub fn visit_leaf(&self, f: &mut dyn FnMut(&Prefix)) {
-        fn visit_node(node: &Option<Box<PrefixNode>>, f: &mut dyn FnMut(&Prefix)) {
-            if let Some(n) = node {
-                if n.zero.is_none() && n.one.is_none() {
-                    f(&n.prefix);
-                } else {
-                    visit_node(&n.zero, f);
-                    visit_node(&n.one, f);
-                }
+    fn visit_node<F>(&self, node: &Option<Box<PrefixNode>>, f: &mut F)
+    where
+        F: FnMut(&Prefix),
+    {
+        if let Some(n) = node {
+            if n.zero.is_none() && n.one.is_none() {
+                f(&n.prefix);
+            } else {
+                self.visit_node(&n.zero, f);
+                self.visit_node(&n.one, f);
             }
         }
+    }
 
-        visit_node(&self.0, f);
+    pub fn visit_leaf<F>(&self, f: &mut F)
+    where
+        F: FnMut(&Prefix),
+    {
+        self.visit_node(&self.0, f);
     }
 }
 

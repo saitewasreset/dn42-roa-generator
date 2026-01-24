@@ -7,6 +7,7 @@ use anyhow::Context;
 use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use tokio::io::AsyncBufReadExt;
 use tracing::{error, info};
 
@@ -72,12 +73,16 @@ pub async fn background_updater(state: AppState) {
 
         for task in &tasks {
             info!("Running task: {}", task.name());
+            let begin = Instant::now();
 
             if let Err(e) = task.run() {
                 error!("Error running task '{}': {:?}", task.name(), e);
             } else {
                 info!("Successfully completed task: {}", task.name());
             }
+
+            let elapsed = begin.elapsed();
+            info!("Task '{}' completed in {:.2?}", task.name(), elapsed);
         }
 
         info!("Waiting for {:?} before next update.", update_interval);

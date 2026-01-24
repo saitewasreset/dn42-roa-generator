@@ -1,6 +1,6 @@
 use crate::formatter::dns_zone::format_dns_zone;
 use crate::io::get_records_from_dirs;
-use crate::parser::get_parsed_ns_records;
+use crate::parser::dns::{generate_reverse_zones, get_parsed_ns_records};
 use crate::task::Task;
 use crate::AppState;
 use std::path::Path;
@@ -31,9 +31,18 @@ impl Task for GenerateDNSAuthoritativeZonesTask {
                 git_repo_local_path.join(&state.config.git_repo_dns_relative_path),
             ];
 
-            let records = get_records_from_dirs("DNS", dns_directories.iter())?;
+            let inetnum_directories = [
+                git_repo_local_path.join(&state.config.git_repo_inetnum_relative_path),
+                git_repo_local_path.join(&state.config.git_repo_inet6num_relative_path),
+            ];
 
-            get_parsed_ns_records(&records, &self.app_state.config.dns_primary_master, &self.app_state.config.dns_responsible_party)
+            let dns_records = get_records_from_dirs("DNS", dns_directories.iter())?;
+            let inetnum_records = get_records_from_dirs("INETNUM", inetnum_directories.iter())?;
+
+            let mut dns_zones = get_parsed_ns_records(&dns_records, &self.app_state.config.dns_primary_master, &self.app_state.config.dns_responsible_party);
+            dns_zones.extend(generate_reverse_zones(&inetnum_records, &self.app_state.config.dns_primary_master, &self.app_state.config.dns_responsible_party));
+
+            dns_zones
         } else {
             warn!("Git repository path {:?} does not exist. Skipping DNS forward zone generation.", git_repo_local_path);
 
