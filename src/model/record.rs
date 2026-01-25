@@ -221,6 +221,10 @@ pub enum RecordField {
     // Inetnum
     #[strum(serialize = "cidr")]
     Cidr,
+
+    // DNSSEC
+    #[strum(serialize = "ds-rdata")]
+    DSRdata,
 }
 
 pub struct RecordFile {

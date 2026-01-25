@@ -54,6 +54,7 @@ impl TryFrom<&RecordFile> for Vec<ExtractedNameServerInfo> {
 struct ExtractedNetworkInfo {
     cidr: Prefix,
     name_servers: Vec<ExtractedNameServerInfo>,
+    ds_rdata: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -61,6 +62,7 @@ struct ExtractedDomainInfo {
     domain: FQDNName,
     tld: String,
     name_servers: Vec<ExtractedNameServerInfo>,
+    ds_rdata: Vec<String>,
 }
 
 impl TryFrom<&RecordFile> for ExtractedDomainInfo
@@ -85,10 +87,13 @@ impl TryFrom<&RecordFile> for ExtractedDomainInfo
 
         let name_servers = record_file.try_into()?;
 
+        let ds_rdata = record_file.get_field(RecordField::DSRdata).cloned().unwrap_or_default();
+
         Ok(ExtractedDomainInfo {
             domain,
             tld,
             name_servers,
+            ds_rdata,
         })
     }
 }
@@ -110,9 +115,12 @@ impl TryFrom<&RecordFile> for ExtractedNetworkInfo {
 
         let name_servers = record_file.try_into()?;
 
+        let ds_rdata = record_file.get_field(RecordField::DSRdata).cloned().unwrap_or_default();
+
         Ok(ExtractedNetworkInfo {
             cidr,
             name_servers,
+            ds_rdata,
         })
     }
 }
@@ -303,6 +311,19 @@ pub fn get_parsed_ns_records(record_files: &[RecordFile], dns_primary_master: &s
                 warn!("Failed to add glue record to zone {}: {}", zone.origin(), e);
             }
         }
+
+        for ds_rdata in extracted_info.ds_rdata {
+            let record = DNSRecord {
+                name: extracted_info.domain.clone(),
+                class: DNSClass::IN,
+                ttl: DEFAULT_TTL,
+                data: DNSRecordData::DS(ds_rdata),
+            };
+
+            zone.add_record(record).unwrap_or_else(|e| {
+                warn!("Failed to add DS record to zone {}: {}", zone.origin(), e);
+            });
+        }
     }
 
     info!("Generating registry-sync records...");
@@ -330,6 +351,80 @@ struct ReverseRecordCounter {
     ipv4_non_align: usize,
     ipv6_align: usize,
     ipv6_non_align: usize,
+}
+
+fn generate_reverse_record_name(cidr: &Prefix) -> Option<FQDNName> {
+    match cidr.network() {
+        IpAddr::V4(ipv4) => {
+            if cidr.prefix_len().is_multiple_of(8) {
+                // IPv4 align with octet boundaries
+                // 192.0.2.0/24 -> 2.0.192.in-addr.arpa
+                let octets = ipv4.octets();
+
+                let num_octets = (cidr.prefix_len() / 8) as usize;
+                let reversed_labels: Vec<String> = octets[..num_octets]
+                    .iter()
+                    .rev()
+                    .map(|o| o.to_string())
+                    .collect();
+                let reverse_zone_name = format!("{}.in-addr.arpa", reversed_labels.join("."));
+
+                Some(FQDNName::from_str(&reverse_zone_name).unwrap())
+            } else {
+                // IPv4 not align with octet boundaries
+                // 192.0.2.0/25 -> CNAME *.0/25.2.0.192.in-addr.arpa.
+
+                let octets = ipv4.octets();
+                let num_full_octets = (cidr.prefix_len() / 8) as usize;
+
+                let labels: Vec<String> = octets[..num_full_octets]
+                    .iter()
+                    .map(|o| o.to_string())
+                    .collect();
+
+                let first_host_id = octets[num_full_octets];
+
+                let cidr_part = format!("{}/{}", first_host_id, cidr.prefix_len());
+
+                let mut with_insert_cidr_part = labels.clone();
+                with_insert_cidr_part.push(cidr_part);
+
+                let with_insert_cidr_reversed = with_insert_cidr_part.into_iter().rev().collect::<Vec<_>>();
+                let mapped_full_name = format!("{}.in-addr.arpa", with_insert_cidr_reversed.join("."));
+
+                Some(FQDNName::from_str(&mapped_full_name).unwrap())
+            }
+        }
+        IpAddr::V6(ipv6) => {
+            // IPv6 align with nibble boundaries
+            // 2001:db8::/32 -> 8.b.d.0.1.0.0.2.ip6.arpa
+            if cidr.prefix_len().is_multiple_of(4) {
+                let segments = ipv6.segments();
+
+                let mut nibbles = Vec::new();
+
+                for segment in &segments {
+                    nibbles.push(format!("{:x}", (segment >> 12) & 0xF));
+                    nibbles.push(format!("{:x}", (segment >> 8) & 0xF));
+                    nibbles.push(format!("{:x}", (segment >> 4) & 0xF));
+                    nibbles.push(format!("{:x}", segment & 0xF));
+                }
+
+                let num_nibbles = (cidr.prefix_len() / 4) as usize;
+                let reversed_labels: Vec<String> = nibbles[..num_nibbles]
+                    .iter()
+                    .rev()
+                    .cloned()
+                    .collect();
+
+                let reverse_zone_name = format!("{}.ip6.arpa", reversed_labels.join("."));
+
+                Some(FQDNName::from_str(&reverse_zone_name).unwrap())
+            } else {
+                None
+            }
+        }
+    }
 }
 
 fn generate_reverse_records(cidr: &Prefix, name_servers: &[ExtractedNameServerInfo], counter: &mut ReverseRecordCounter) -> Vec<DNSRecord> {
@@ -467,6 +562,24 @@ fn generate_reverse_records(cidr: &Prefix, name_servers: &[ExtractedNameServerIn
     reverse_records
 }
 
+fn generate_reverse_ds_record(cidr: &Prefix, ds_rdata_list: &[String]) -> Vec<DNSRecord> {
+    let mut ds_records = Vec::new();
+
+    if let Some(name) = generate_reverse_record_name(cidr) {
+        for ds_rdata in ds_rdata_list {
+            ds_records.push(DNSRecord {
+                name: name.clone(),
+                class: DNSClass::IN,
+                ttl: DEFAULT_TTL,
+                data: DNSRecordData::DS(ds_rdata.clone()),
+            });
+        }
+    }
+
+
+    ds_records
+}
+
 pub fn generate_reverse_zones(record_files: &[RecordFile], dns_primary_master: &str, dns_responsible_person: &str) -> Vec<DNSZone> {
     let serial = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -481,6 +594,7 @@ pub fn generate_reverse_zones(record_files: &[RecordFile], dns_primary_master: &
     let mut ipv6_tree = PrefixTree::new();
 
     let mut cidr_to_nameservers: HashMap<Prefix, Vec<ExtractedNameServerInfo>> = HashMap::new();
+    let mut cidr_to_ds_rdata: HashMap<Prefix, Vec<String>> = HashMap::new();
 
     for record_file in record_files {
         let extracted_info = match ExtractedNetworkInfo::try_from(record_file) {
@@ -493,6 +607,7 @@ pub fn generate_reverse_zones(record_files: &[RecordFile], dns_primary_master: &
 
         if !extracted_info.name_servers.is_empty() {
             cidr_to_nameservers.insert(extracted_info.cidr.clone(), extracted_info.name_servers.clone());
+            cidr_to_ds_rdata.insert(extracted_info.cidr.clone(), extracted_info.ds_rdata.clone());
 
             match extracted_info.cidr.network() {
                 IpAddr::V4(_) => {
@@ -509,10 +624,17 @@ pub fn generate_reverse_zones(record_files: &[RecordFile], dns_primary_master: &
 
     ipv4_tree.visit_leaf(&mut |prefix| {
         let name_servers = cidr_to_nameservers.get(prefix).unwrap();
+        let ds_rdata = cidr_to_ds_rdata.get(prefix).unwrap();
 
         for record in generate_reverse_records(prefix, name_servers, &mut counter) {
             if let Err(e) = ipv4_zone.add_record(record) {
                 error!("Failed to add reverse record to IPv4 zone {}: {}", ipv4_zone.origin(), e);
+            }
+        }
+
+        for record in generate_reverse_ds_record(prefix, ds_rdata) {
+            if let Err(e) = ipv4_zone.add_record(record) {
+                error!("Failed to add DS record to IPv4 zone {}: {}", ipv4_zone.origin(), e);
             }
         }
     });
@@ -523,6 +645,12 @@ pub fn generate_reverse_zones(record_files: &[RecordFile], dns_primary_master: &
         for record in generate_reverse_records(prefix, name_servers, &mut counter) {
             if let Err(e) = ipv6_zone.add_record(record) {
                 error!("Failed to add reverse record to IPv6 zone {}: {}", ipv6_zone.origin(), e);
+            }
+        }
+
+        for record in generate_reverse_ds_record(prefix, cidr_to_ds_rdata.get(prefix).unwrap()) {
+            if let Err(e) = ipv6_zone.add_record(record) {
+                error!("Failed to add DS record to IPv6 zone {}: {}", ipv6_zone.origin(), e);
             }
         }
     });

@@ -106,6 +106,9 @@ fn generate_record_data(buffer: &mut String, data: &DNSRecordData) {
         DNSRecordData::SRV { priority, weight, port, target } => {
             buffer.push_str(format!("{} {} {} {}", priority, weight, port, ensure_fqdn(target)).as_str());
         }
+        DNSRecordData::DS(content) => {
+            buffer.push_str(content);
+        }
     }
 }
 

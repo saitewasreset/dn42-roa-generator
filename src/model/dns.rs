@@ -232,6 +232,7 @@ pub enum DNSRecordData {
         port: u16,
         target: String,
     },
+    DS(String),
 }
 
 impl DNSRecordData {
@@ -246,6 +247,7 @@ impl DNSRecordData {
             DNSRecordData::SOA { .. } => "SOA",
             DNSRecordData::PTR(_) => "PTR",
             DNSRecordData::SRV { .. } => "SRV",
+            DNSRecordData::DS(_) => "DS",
         }
     }
 }
@@ -276,6 +278,7 @@ impl DNSRecord {
             DNSRecordData::TXT(_) => 16,
             DNSRecordData::AAAA(_) => 28,
             DNSRecordData::SRV { .. } => 33,
+            DNSRecordData::DS(_) => 43,
         }
     }
 }
