@@ -170,7 +170,7 @@ fn generate_record_lines(buffer: &mut String, records: &HashSet<DNSRecord>, curr
     records.sort_by(|x, y| x
         .name
         .as_str()
-        .cmp(&y.name.as_str())
+        .cmp(y.name.as_str())
         .then(
             x.data.type_str()
                 .cmp(y.data.type_str())));

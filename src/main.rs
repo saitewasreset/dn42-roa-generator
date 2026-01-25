@@ -64,7 +64,8 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route(&app_state.config.roa_endpoint, get(get_roa_json))
-        .route(&app_state.config.dns_endpoint, get(get_dns_conf))
+        .route(&app_state.config.dns_config_endpoint, get(get_dns_conf))
+        .route(&format!("{}/{{zone}}", app_state.config.dns_content_endpoint_directory), get(get_dns_zone))
         .with_state(app_state.clone());
 
     let listener = tokio::net::TcpListener::bind(&app_state.config.listen_address).await?;
@@ -98,8 +99,30 @@ async fn get_dns_conf(State(state): State<AppState>) -> Response<Body> {
         }
     };
 
+    let zone_name = data.content.keys().collect::<Vec<_>>();
+
     (
-        [("Content-Type", "text/plain")],
-        data.content.clone(),
+        [("Content-Type", "application/json")],
+        serde_json::to_string(&zone_name).unwrap_or_else(|_| "[]".to_string()),
     ).into_response()
+}
+
+async fn get_dns_zone(
+    State(state): State<AppState>,
+    axum::extract::Path(zone_name): axum::extract::Path<String>,
+) -> Response<Body> {
+    let data = match state.dns_data.read() {
+        Ok(data) => data,
+        Err(_) => {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    match data.content.get(&zone_name) {
+        Some(zone_content) => (
+            [("Content-Type", "text/plain")],
+            zone_content.clone(),
+        ).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }

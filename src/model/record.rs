@@ -41,7 +41,7 @@ fn bits_to_octets(bits: &[u8]) -> Vec<u8> {
         }
     }
 
-    if bits.len() % 8 != 0 {
+    if !bits.len().is_multiple_of(8) {
         current_octet <<= 8 - (bits.len() % 8);
         octets.push(current_octet);
     }
@@ -49,7 +49,7 @@ fn bits_to_octets(bits: &[u8]) -> Vec<u8> {
     octets
 }
 
-fn vec_to_slice_zero_fill<const N: usize>(vec: &Vec<u8>) -> [u8; N] {
+fn slice_zero_fill<const N: usize>(vec: &[u8]) -> [u8; N] {
     let mut slice: [u8; N] = [0u8; N];
     for (i, &octet) in vec.iter().enumerate().take(N) {
         slice[i] = octet;
@@ -65,14 +65,14 @@ impl Prefix {
                     return Err(format!("Invalid prefix length for IPv4: {}", prefix_len));
                 }
 
-                IpAddr::V4(Ipv4Addr::from(vec_to_slice_zero_fill(&bits_to_octets(&octets_to_bits(&ipv4.octets(), prefix_len)))))
+                IpAddr::V4(Ipv4Addr::from(slice_zero_fill(&bits_to_octets(&octets_to_bits(&ipv4.octets(), prefix_len)))))
             }
             IpAddr::V6(ipv6) => {
                 if prefix_len > 128 {
                     return Err(format!("Invalid prefix length for IPv6: {}", prefix_len));
                 }
 
-                IpAddr::V6(Ipv6Addr::from(vec_to_slice_zero_fill(&bits_to_octets(&octets_to_bits(&ipv6.octets(), prefix_len)))))
+                IpAddr::V6(Ipv6Addr::from(slice_zero_fill(&bits_to_octets(&octets_to_bits(&ipv6.octets(), prefix_len)))))
             }
         };
 
@@ -91,11 +91,11 @@ impl Prefix {
 
         let network = match self.network {
             IpAddr::V4(_) => {
-                let octets: [u8; 4] = vec_to_slice_zero_fill(&octets);
+                let octets: [u8; 4] = slice_zero_fill(&octets);
                 IpAddr::V4(Ipv4Addr::from(octets))
             }
             IpAddr::V6(_) => {
-                let octets = vec_to_slice_zero_fill(&octets);
+                let octets = slice_zero_fill(&octets);
                 IpAddr::V6(std::net::Ipv6Addr::from(octets))
             }
         };
@@ -113,7 +113,7 @@ impl Prefix {
 
         let octets = bits_to_octets(bits);
 
-        let octets: [u8; 4] = vec_to_slice_zero_fill(&octets);
+        let octets: [u8; 4] = slice_zero_fill(&octets);
 
         Some(Prefix {
             network: IpAddr::V4(Ipv4Addr::from(octets)),
@@ -128,7 +128,7 @@ impl Prefix {
 
         let octets = bits_to_octets(bits);
 
-        let octets = vec_to_slice_zero_fill(&octets);
+        let octets = slice_zero_fill(&octets);
 
         Some(Prefix {
             network: IpAddr::V6(std::net::Ipv6Addr::from(octets)),

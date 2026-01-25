@@ -282,6 +282,12 @@ impl DNSRecord {
 
 pub struct PrefixTree(Option<Box<PrefixNode>>);
 
+impl Default for PrefixTree {
+    fn default() -> Self {
+        PrefixTree::new()
+    }
+}
+
 impl PrefixTree {
     pub fn new() -> Self {
         PrefixTree(None)

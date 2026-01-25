@@ -290,18 +290,17 @@ pub fn get_parsed_ns_records(record_files: &[RecordFile], dns_primary_master: &s
                 warn!("Failed to add NS record to zone {}: {}", zone.origin(), e);
             }
 
-            if let Some(ip) = name_server.name_server_ip {
-                if let Err(e) = zone.add_record(DNSRecord {
-                    name: extracted_info.domain.clone(),
-                    class: DNSClass::IN,
-                    ttl: DEFAULT_TTL,
-                    data: match ip {
-                        IpAddr::V4(ipv4) => DNSRecordData::A(ipv4),
-                        IpAddr::V6(ipv6) => DNSRecordData::AAAA(ipv6),
-                    },
-                }) {
-                    warn!("Failed to add glue record to zone {}: {}", zone.origin(), e);
-                }
+            if let Some(ip) = name_server.name_server_ip
+                && let Err(e) = zone.add_record(DNSRecord {
+                name: extracted_info.domain.clone(),
+                class: DNSClass::IN,
+                ttl: DEFAULT_TTL,
+                data: match ip {
+                    IpAddr::V4(ipv4) => DNSRecordData::A(ipv4),
+                    IpAddr::V6(ipv6) => DNSRecordData::AAAA(ipv6),
+                },
+            }) {
+                warn!("Failed to add glue record to zone {}: {}", zone.origin(), e);
             }
         }
     }
@@ -312,13 +311,13 @@ pub fn get_parsed_ns_records(record_files: &[RecordFile], dns_primary_master: &s
 
     info!("Generated {} registry-sync records.", registry_sync_records.len());
 
-    tld_to_zone.get_mut("dn42").map(|zone| {
+    if let Some(zone) = tld_to_zone.get_mut("dn42") {
         for record in registry_sync_records {
             if let Err(e) = zone.add_record(record.clone()) {
                 warn!("Failed to add registry-sync record to zone {}: {}", zone.origin(), e);
             }
         }
-    });
+    }
 
     info!("Generated {} DNS forward zones.", tld_to_zone.values().map(|z| z.records().len()).sum::<usize>());
 
@@ -365,7 +364,7 @@ fn generate_reverse_records(cidr: &Prefix, name_servers: &[ExtractedNameServerIn
 
     match cidr.network() {
         IpAddr::V4(ipv4) => {
-            if cidr.prefix_len() % 8 == 0 {
+            if cidr.prefix_len().is_multiple_of(8) {
                 // IPv4 align with octet boundaries
                 // 192.0.2.0/24 -> 2.0.192.in-addr.arpa
                 let octets = ipv4.octets();
@@ -434,7 +433,7 @@ fn generate_reverse_records(cidr: &Prefix, name_servers: &[ExtractedNameServerIn
         IpAddr::V6(ipv6) => {
             // IPv6 align with nibble boundaries
             // 2001:db8::/32 -> 8.b.d.0.1.0.0.2.ip6.arpa
-            if cidr.prefix_len() % 4 == 0 {
+            if cidr.prefix_len().is_multiple_of(4) {
                 let segments = ipv6.segments();
 
                 let mut nibbles = Vec::new();
@@ -511,7 +510,7 @@ pub fn generate_reverse_zones(record_files: &[RecordFile], dns_primary_master: &
     ipv4_tree.visit_leaf(&mut |prefix| {
         let name_servers = cidr_to_nameservers.get(prefix).unwrap();
 
-        for record in generate_reverse_records(prefix, &name_servers, &mut counter) {
+        for record in generate_reverse_records(prefix, name_servers, &mut counter) {
             if let Err(e) = ipv4_zone.add_record(record) {
                 error!("Failed to add reverse record to IPv4 zone {}: {}", ipv4_zone.origin(), e);
             }
@@ -521,7 +520,7 @@ pub fn generate_reverse_zones(record_files: &[RecordFile], dns_primary_master: &
     ipv6_tree.visit_leaf(&mut |prefix| {
         let name_servers = cidr_to_nameservers.get(prefix).unwrap();
 
-        for record in generate_reverse_records(prefix, &name_servers, &mut counter) {
+        for record in generate_reverse_records(prefix, name_servers, &mut counter) {
             if let Err(e) = ipv6_zone.add_record(record) {
                 error!("Failed to add reverse record to IPv6 zone {}: {}", ipv6_zone.origin(), e);
             }

@@ -120,6 +120,7 @@ pub async fn run_command_echo_output(command: &mut tokio::process::Command) -> a
     Ok(())
 }
 
+#[allow(clippy::collapsible_else_if)]
 pub async fn sync_git_repository(repo_url: &str, repo_local_path: &Path, do_git_pull: bool) -> anyhow::Result<()> {
     if !repo_local_path.exists() {
         info!("Syncing git repository {} to {:?}", repo_url, repo_local_path);

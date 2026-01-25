@@ -49,16 +49,15 @@ impl Task for GenerateDNSAuthoritativeZonesTask {
             Vec::default()
         };
 
+        let zone_name_to_content = dns_zones
+            .into_iter()
+            .map(|zone| (zone.origin().to_string(), format_dns_zone(&zone)))
+            .collect::<std::collections::HashMap<String, _>>();
+
         let mut data_lock = state.dns_data.write().unwrap();
-
-        // example.org=203.0.113.210, 192.0.2.4:5300
-        let formatted_output_list = dns_zones
-            .iter()
-            .map(|zone| format_dns_zone(zone))
-            .collect::<Vec<String>>();
-
+        
         data_lock.last_updated = std::time::SystemTime::now();
-        data_lock.content = formatted_output_list.join("\n");
+        data_lock.content = zone_name_to_content;
 
         Ok(())
     }

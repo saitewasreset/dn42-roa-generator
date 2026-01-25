@@ -6,6 +6,7 @@ pub mod task;
 pub mod formatter;
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 #[derive(Clone, Default)]
@@ -20,7 +21,8 @@ pub struct AppState {
 pub struct AppConfig {
     pub listen_address: String,
     pub roa_endpoint: String,
-    pub dns_endpoint: String,
+    pub dns_config_endpoint: String,
+    pub dns_content_endpoint_directory: String,
 
     pub do_git_pull: bool,
 
@@ -44,7 +46,8 @@ impl Default for AppConfig {
         AppConfig {
             listen_address: "0.0.0.0:8080".to_string(),
             roa_endpoint: "/roa.json".to_string(),
-            dns_endpoint: "/dns.conf".to_string(),
+            dns_config_endpoint: "/dns/config.json".to_string(),
+            dns_content_endpoint_directory: "/dns/content".to_string(),
             do_git_pull: true,
             git_repo_url: "git@git.dn42.dev:dn42/registry.git".to_string(),
             git_repo_local_path: "./registry".to_string(),
@@ -78,14 +81,15 @@ impl Default for ROACache {
 }
 
 pub struct DNSCache {
-    pub content: String,
+    // zone -> zone content
+    pub content: HashMap<String, String>,
     pub last_updated: std::time::SystemTime,
 }
 
 impl Default for DNSCache {
     fn default() -> Self {
         DNSCache {
-            content: String::new(),
+            content: HashMap::new(),
             last_updated: std::time::SystemTime::now(),
         }
     }
