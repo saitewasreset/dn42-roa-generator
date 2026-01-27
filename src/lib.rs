@@ -60,8 +60,8 @@ impl Default for AppConfig {
 
             update_interval_seconds: 300,
 
-            dns_primary_master: "default_not_set".to_string(),
-            dns_responsible_party: "default_not_set".to_string(),
+            dns_primary_master: "default-not-set".to_string(),
+            dns_responsible_party: "default-not-set".to_string(),
         }
     }
 }
