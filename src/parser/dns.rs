@@ -300,7 +300,7 @@ pub fn get_parsed_ns_records(record_files: &[RecordFile], dns_primary_master: &s
 
             if let Some(ip) = name_server.name_server_ip
                 && let Err(e) = zone.add_record(DNSRecord {
-                name: extracted_info.domain.clone(),
+                name: name_server.name_server,
                 class: DNSClass::IN,
                 ttl: DEFAULT_TTL,
                 data: match ip {
@@ -320,9 +320,12 @@ pub fn get_parsed_ns_records(record_files: &[RecordFile], dns_primary_master: &s
                 data: DNSRecordData::DS(ds_rdata),
             };
 
-            zone.add_record(record).unwrap_or_else(|e| {
-                warn!("Failed to add DS record to zone {}: {}", zone.origin(), e);
-            });
+            // do not add DS record to its own zone
+            if zone.origin() != &extracted_info.domain {
+                zone.add_record(record).unwrap_or_else(|e| {
+                    warn!("Failed to add DS record to zone {}: {}", zone.origin(), e);
+                });
+            }
         }
     }
 
@@ -589,6 +592,21 @@ pub fn generate_reverse_zones(record_files: &[RecordFile], dns_primary_master: &
 
     let mut ipv4_zone = new_zone("in-addr.arpa", dns_primary_master.to_string(), dns_responsible_person.to_string(), serial);
     let mut ipv6_zone = new_zone("ip6.arpa", dns_primary_master.to_string(), dns_responsible_person.to_string(), serial);
+
+    // Every zone should have at least one NS record pointing to the primary master
+    ipv4_zone.add_record(DNSRecord {
+        name: "in-addr.arpa".parse().unwrap(),
+        class: DNSClass::IN,
+        ttl: DEFAULT_TTL,
+        data: DNSRecordData::NS(dns_primary_master.to_string()),
+    }).unwrap();
+
+    ipv6_zone.add_record(DNSRecord {
+        name: "ip6.arpa".parse().unwrap(),
+        class: DNSClass::IN,
+        ttl: DEFAULT_TTL,
+        data: DNSRecordData::NS(dns_primary_master.to_string()),
+    }).unwrap();
 
     let mut ipv4_tree = PrefixTree::new();
     let mut ipv6_tree = PrefixTree::new();
